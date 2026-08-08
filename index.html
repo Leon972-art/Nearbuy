@@ -1,1 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NearBuy — Buy & Sell Nearby</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#17202a}
+header{background:#fff;padding:15px;border-bottom:1px solid #ddd;position:sticky;top:0;z-index:5}
+nav{max-width:1100px;margin:auto;display:flex;align-items:center;gap:12px}
+.logo{font-size:25px;font-weight:bold;color:#3157d5}nav input{flex:1;padding:12px;border:1px solid #ddd;border-radius:10px}
+button{border:0;border-radius:9px;padding:11px 15px;background:#3157d5;color:white;font-weight:bold}
+main{max-width:1100px;margin:25px auto;padding:0 15px}
+.hero{background:linear-gradient(135deg,#3157d5,#7355e8);color:white;padding:35px;border-radius:20px}
+.hero h1{font-size:38px;margin:0 0 10px}
+.tabs{display:flex;gap:8px;margin:20px 0;flex-wrap:wrap}
+.tabs button{background:white;color:#222;border:1px solid #ddd}
+.tabs button.active{background:#222;color:white}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px}
+.card,.panel{background:white;padding:17px;border-radius:15px;border:1px solid #e2e5eb;margin-bottom:15px}
+.pic{height:150px;background:#e9ecf4;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:60px}
+.price{font-size:22px;font-weight:bold;margin-top:12px}
+.muted{color:#697383;font-size:13px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:9px;margin:5px 0}
+.view{display:none}.view.active{display:block}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.stat{background:white;padding:18px;border-radius:14px;border:1px solid #ddd}
+.stat b{font-size:24px}
+.modal{display:none;position:fixed;inset:0;background:#0008;align-items:center;justify-content:center;z-index:10}
+.modal.open{display:flex}.box{background:white;padding:22px;border-radius:18px;width:92%;max-width:550px}
+.row{display:flex;justify-content:space-between;padding:8px 0}
+</style>
+</head>
 
+<body>
+<header>
+<nav>
+<div class="logo">NearBuy</div>
+<input id="search" placeholder="Search products..." oninput="render()">
+<button onclick="sell()">Sell</button>
+</nav>
+</header>
+
+<main>
+
+<section class="hero">
+<h1>Buy nearby. Sell anywhere.</h1>
+<p>Buy and sell products near your location with secure marketplace checkout.</p>
+<button onclick="show('market')">Explore Products</button>
+</section>
+
+<div class="tabs">
+<button onclick="show('market')" class="active">Marketplace</button>
+<button onclick="show('orders')">My Orders</button>
+<button onclick="show('seller')">Seller Dashboard</button>
+<button onclick="show('admin')">Business</button>
+</div>
+
+<section id="market" class="view active">
+<h2>Products Near You</h2>
+<p class="muted">Prices include NearBuy's 20% marketplace margin. Tax and shipping are calculated separately at checkout.</p>
+<div id="products" class="grid"></div>
+</section>
+
+<section id="orders" class="view">
+<h2>My Orders</h2>
+<div id="ordersBox"></div>
+</section>
+
+<section id="seller" class="view">
+<h2>Seller Dashboard</h2>
+<div class="stats">
+<div class="stat">Listings<br><b id="listings">0</b></div>
+<div class="stat">Orders<br><b id="sellerOrders">0</b></div>
+<div class="stat">Seller earnings<br><b id="sellerMoney">$0</b></div>
+</div>
+<div class="panel">
+<h3>How payment works</h3>
+<p>The seller receives their original listing price after the order reaches the payout stage. NearBuy's 20% marketplace margin is recorded separately.</p>
+</div>
+</section>
+
+<section id="admin" class="view">
+<h2>NearBuy Business</h2>
+<div class="stats">
+<div class="stat">Sales<br><b id="sales">$0</b></div>
+<div class="stat">20% Margin<br><b id="margin">$0</b></div>
+<div class="stat">Seller Payouts<br><b id="payout">$0</b></div>
+<div class="stat">Orders<br><b id="count">0</b></div>
+</div>
+<div class="panel">
+<h3>Money flow</h3>
+<p>Buyer payment → Payment provider → NearBuy margin → Seller payable balance → Seller payout after delivery/return conditions.</p>
+<p><b>Important:</b> this demo does not process real money. A production payment provider and business bank account must be connected before accepting real payments.</p>
+</div>
+</section>
+
+</main>
+
+<div class="modal" id="modal">
+<div class="box">
+<div id="modalContent"></div>
+</div>
+</div>
+
+<script>
+let products=[
+{id:1,name:"iPhone 15 Pro",price:650,currency:"USD",place:"New Delhi, India",icon:"📱"},
+{id:2,name:"Mountain Bike",price:280,currency:"USD",place:"New Delhi, India",icon:"🚲"},
+{id:3,name:"Modern Sofa",price:220,currency:"EUR",place:"Berlin, Germany",icon:"🛋️"},
+{id:4,name:"Camera Kit",price:900,currency:"USD",place:"New York, USA",icon:"📷"}
+];
+
+let orders=[];
+
+function money(n,c){
+return new Intl.NumberFormat(undefined,{style:"currency",currency:c}).format(n)
+}
+
+function show(id){
+document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+document.getElementById(id).classList.add("active");
+if(id==="market")render();
+if(id==="orders")renderOrders();
+if(id==="seller")renderSeller();
+if(id==="admin")renderAdmin();
+}
+
+function render(){
+let q=document.getElementById("search").value.toLowerCase();
+let a=products.filter(p=>(p.name+" "+p.place).toLowerCase().includes(q));
+
+document.getElementById("products").innerHTML=a.map(p=>`
+<div class="card">
+<div class="pic">${p.icon}</div>
+<div class="price">${money(p.price*1.2,p.currency)}</div>
+<h3>${p.name}</h3>
+<p class="muted">📍 ${p.place}</p>
+<p class="muted">Seller price: ${money(p.price,p.currency)}</p>
+<p class="muted">NearBuy margin: 20%</p>
+<button onclick="buy(${p.id})">Buy Now</button>
+<button onclick="ask('${p.name}')">Ask Seller</button>
+</div>`).join("");
+}
+
+function buy(id){
+let p=products.find(x=>x.id===id);
+let total=p.price*1.2;
+
+document.getElementById("modalContent").innerHTML=`
+<h2>Checkout</h2>
+<h3>${p.name}</h3>
+<div class="row"><span>Seller price</span><b>${money(p.price,p.currency)}</b></div>
+<div class="row"><span>NearBuy 20% margin</span><b>${money(p.price*.2,p.currency)}</b></div>
+<div class="row"><span>Tax</span><b>Calculated at checkout</b></div>
+<div class="row"><span>Shipping</span><b>Calculated by destination</b></div>
+<hr>
+<div class="row"><b>Product total</b><b>${money(total,p.currency)}</b></div>
+<input id="buyer" placeholder="Your name">
+<input id="address" placeholder="Delivery address">
+<button onclick="place(${id})">Place Demo Order</button>
+<button onclick="closeModal()">Cancel</button>
+<p class="muted">Demo mode — no real payment is taken.</p>
+`;
+document.getElementById("modal").classList.add("open");
+}
+
+function place(id){
+let p=products.find(x=>x.id===id);
+orders.push({
+product:p.name,total:p.price*1.2,
+seller:p.price,margin:p.price*.2,
+currency:p.currency,status:"Paid — awaiting pickup"
+});
+closeModal();
+show("orders");
+}
+
+function ask(name){
+document.getElementById("modalContent").innerHTML=`
+<h2>Ask Seller</h2>
+<p>Question about: <b>${name}</b></p>
+<textarea rows="5" placeholder="Write your question..."></textarea>
+<button onclick="alert('Inquiry saved. Real chat will be connected in production.')">Send Inquiry</button>
+<button onclick="closeModal()">Cancel</button>`;
+document.getElementById("modal").classList.add("open");
+}
+
+function closeModal(){
+document.getElementById("modal").classList.remove("open");
+}
+
+function sell(){
+document.getElementById("modalContent").innerHTML=`
+<h2>Sell a Product</h2>
+<input id="newName" placeholder="Product name">
+<input id="newPrice" type="number" placeholder="Your price">
+<select id="newCurrency">
+<option>USD</option><option>INR</option><option>EUR</option><option>GBP</option>
+</select>
+<input id="newPlace" placeholder="City and country">
+<button onclick="addProduct()">Publish Product</button>
+<button onclick="closeModal()">Cancel</button>
+<p class="muted">NearBuy automatically adds a 20% marketplace margin to the buyer price.</p>`;
+document.getElementById("modal").classList.add("open");
+}
+
+function addProduct(){
+let p={
+id:Date.now(),
+name:document.getElementById("newName").value,
+price:+document.getElementById("newPrice").value,
+currency:document.getElementById("newCurrency").value,
+place:document.getElementById("newPlace").value||"Your location",
+icon:"📦"
+};
+if(!p.name||!p.price)return alert("Enter product and price.");
+products.push(p);
+closeModal();
+render();
+}
+
+function renderOrders(){
+document.getElementById("ordersBox").innerHTML=orders.length?
+orders.map(o=>`
+<div class="panel">
+<h3>${o.product}</h3>
+<p>Total paid: <b>${money(o.total,o.currency)}</b></p>
+<p>Seller payout: ${money(o.seller,o.currency)}</p>
+<p>NearBuy margin: ${money(o.margin,o.currency)}</p>
+<p><b>${o.status}</b></p>
+</div>`).join("")
+:"<p>No orders yet.</p>";
+}
+
+function renderSeller(){
+let payout=orders.reduce((s,o)=>s+o.seller,0);
+document.getElementById("listings").textContent=products.length;
+document.getElementById("sellerOrders").textContent=orders.length;
+document.getElementById("sellerMoney").textContent=orders.length?money(payout,orders[0].currency):"$0";
+}
+
+function renderAdmin(){
+let sales=orders.reduce((s,o)=>s+o.total,0);
+let margin=orders.reduce((s,o)=>s+o.margin,0);
+let payout=orders.reduce((s,o)=>s+o.seller,0);
+let c=orders.length?orders[0].currency:"USD";
+
+document.getElementById("sales").textContent=money(sales,c);
+document.getElementById("margin").textContent=money(margin,c);
+document.getElementById("payout").textContent=money(payout,c);
+document.getElementById("count").textContent=orders.length;
+}
+
+render();
+</script>
+</body>
+  </html>
